@@ -9,18 +9,16 @@ class AppError extends Error {
   }
 }
 
-// Wrapper for async functions to catch errors
+
 const catchAsync = (fn) => {
   return (req, res, next) => {
     fn(req, res, next).catch(next);
   };
 };
 
-// 1. Create a new event
 exports.createEvent = catchAsync(async (req, res, next) => {
   const { title, dateTime, location, capacity } = req.body;
 
-  // --- Input Validation ---
   if (!title || !dateTime || !location || !capacity) {
     return next(
       new AppError(
@@ -62,7 +60,6 @@ exports.createEvent = catchAsync(async (req, res, next) => {
   });
 });
 
-// 2. Get details for a specific event, including registered users
 exports.getEventById = catchAsync(async (req, res, next) => {
   const eventId = parseInt(req.params.id);
 
@@ -72,7 +69,7 @@ exports.getEventById = catchAsync(async (req, res, next) => {
       registrations: {
         include: {
           user: {
-            select: { id: true, name: true, email: true }, // Only return public user info
+            select: { id: true, name: true, email: true },
           },
         },
       },
@@ -83,7 +80,6 @@ exports.getEventById = catchAsync(async (req, res, next) => {
     return next(new AppError("No event found with that ID.", 404));
   }
 
-  // Map registrations to a cleaner user list
   const registeredUsers = event.registrations.map((reg) => reg.user);
 
   res.status(200).json({
@@ -99,7 +95,6 @@ exports.getEventById = catchAsync(async (req, res, next) => {
   });
 });
 
-// 3. Register a user for an event
 exports.registerForEvent = catchAsync(async (req, res, next) => {
   const eventId = parseInt(req.params.id);
   const { userId } = req.body;
@@ -108,9 +103,7 @@ exports.registerForEvent = catchAsync(async (req, res, next) => {
     return next(new AppError("User ID is required for registration.", 400));
   }
 
-  // Use a transaction to ensure atomicity (all or nothing)
   const result = await prisma.$transaction(async (tx) => {
-    // Step 1: Find the event and lock it for the transaction
     const event = await tx.event.findUnique({
       where: { id: eventId },
     });
@@ -119,12 +112,10 @@ exports.registerForEvent = catchAsync(async (req, res, next) => {
       throw new AppError("No event found with that ID.", 404);
     }
 
-    // Step 2: Check if the event is in the past
     if (new Date(event.dateTime) < new Date()) {
       throw new AppError("Cannot register for a past event.", 400);
     }
 
-    // Step 3: Check if the event is at full capacity
     const registrationCount = await tx.registration.count({
       where: { eventId: eventId },
     });
@@ -133,8 +124,6 @@ exports.registerForEvent = catchAsync(async (req, res, next) => {
       throw new AppError("Event is at full capacity.", 400);
     }
 
-    // Step 4: Create the registration. Prisma's unique constraint on @@id([userId, eventId])
-    // will automatically prevent duplicate registrations and throw an error.
     await tx.registration.create({
       data: {
         userId: userId,
@@ -149,7 +138,6 @@ exports.registerForEvent = catchAsync(async (req, res, next) => {
   });
 });
 
-// 4. Cancel a user's registration
 exports.cancelRegistration = catchAsync(async (req, res, next) => {
   const eventId = parseInt(req.params.id);
   const { userId } = req.body;
@@ -160,7 +148,6 @@ exports.cancelRegistration = catchAsync(async (req, res, next) => {
     );
   }
 
-  // The composite key `userId_eventId` is automatically created by Prisma
   await prisma.registration.delete({
     where: {
       userId_eventId: {
@@ -170,22 +157,18 @@ exports.cancelRegistration = catchAsync(async (req, res, next) => {
     },
   });
 
-  res.status(204).send(); // 204 No Content is standard for successful DELETE
+  res.status(204).send();
 });
 
-// 5. List all upcoming events
 exports.listUpcomingEvents = catchAsync(async (req, res, next) => {
   const upcomingEvents = await prisma.event.findMany({
     where: {
       dateTime: {
-        gt: new Date(), // 'gt' means "greater than"
+        gt: new Date(),
       },
     },
-    // Custom sorting as required
-    orderBy: [
-      { dateTime: "asc" }, // First by date (ascending)
-      { location: "asc" }, // Then by location (alphabetically)
-    ],
+
+    orderBy: [{ dateTime: "asc" }, { location: "asc" }],
   });
 
   res.status(200).json({
@@ -197,11 +180,9 @@ exports.listUpcomingEvents = catchAsync(async (req, res, next) => {
   });
 });
 
-// 6. Get event statistics
 exports.getEventStats = catchAsync(async (req, res, next) => {
   const eventId = parseInt(req.params.id);
 
-  // Fetch event and the count of its registrations in one go
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     include: {
