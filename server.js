@@ -1,19 +1,19 @@
-const express = require("express");
 require("dotenv").config();
 
-const app = express();
+const express = require("express");
 const eventRoutes = require("./src/routes/event.routes");
 const { errorHandler } = require("./src/middleware/errorHandler");
 
-app.use(express.json()); // Middleware to parse JSON bodies
+const app = express();
 
-// Main route
-app.use("/api/events", eventRoutes);
+app.use(express.json());
 
-// Central error handler
+app.use("/api", eventRoutes);
+
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on http://localhost:${PORT}`);
 });
